@@ -57,6 +57,8 @@ class KeywordSpotter(
         return KeywordSpotterResult(keyword = keyword, tokens = tokens, timestamps = timestamps)
     }
 
+    fun text2Tokens(text: Array<String>): Array<String> = text2Tokens(ptr, text)
+
     private external fun delete(ptr: Long)
 
     private external fun newFromAsset(
@@ -72,6 +74,7 @@ class KeywordSpotter(
     private external fun isReady(ptr: Long, streamPtr: Long): Boolean
     private external fun decode(ptr: Long, streamPtr: Long)
     private external fun getResult(ptr: Long, streamPtr: Long): Array<Any>
+    private external fun text2Tokens(ptr: Long, text: Array<String>): Array<String>
 
     companion object {
         init {
@@ -122,6 +125,8 @@ fun getKwsModelConfig(type: Int): OnlineModelConfig? {
                 ),
                 tokens = "$modelDir/tokens.txt",
                 modelType = "zipformer2",
+                bpeVocab = "$modelDir/bpe.vocab",
+                modelingUnit = "bpe",
             )
         }
 

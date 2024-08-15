@@ -103,6 +103,18 @@ static KeywordSpotterConfig GetKwsConfig(JNIEnv *env, jobject config) {
   ans.model_config.model_type = p;
   env->ReleaseStringUTFChars(s, p);
 
+  fid = env->GetFieldID(model_config_cls, "bpeVocab", "Ljava/lang/String;");
+  s = (jstring)env->GetObjectField(model_config, fid);
+  p = env->GetStringUTFChars(s, nullptr);
+  ans.model_config.bpe_vocab = p;
+  env->ReleaseStringUTFChars(s, p);
+
+  fid = env->GetFieldID(model_config_cls, "modelingUnit", "Ljava/lang/String;");
+  s = (jstring)env->GetObjectField(model_config, fid);
+  p = env->GetStringUTFChars(s, nullptr);
+  ans.model_config.modeling_unit = p;
+  env->ReleaseStringUTFChars(s, p);
+
   return ans;
 }
 
@@ -230,4 +242,33 @@ Java_com_k2fsa_sherpa_onnx_KeywordSpotter_getResult(JNIEnv *env,
   env->SetObjectArrayElement(obj_arr, 2, timestamps_arr);
 
   return obj_arr;
+}
+
+SHERPA_ONNX_EXTERN_C
+JNIEXPORT jobjectArray JNICALL Java_com_k2fsa_sherpa_onnx_KeywordSpotter_text2Tokens(
+    JNIEnv *env, jobject /*obj*/, jlong ptr, jobjectArray text_array) {
+  auto kws = reinterpret_cast<sherpa_onnx::KeywordSpotter *>(ptr);
+
+  std::vector<std::string> text;
+  for (int i = 0; i < env->GetArrayLength(text_array); ++i) {
+    jstring jtext = (jstring)env->GetObjectArrayElement(text_array, i);
+    const char *p = env->GetStringUTFChars(jtext, nullptr);
+    text.push_back(p);
+    env->ReleaseStringUTFChars(jtext, p);
+    env->DeleteLocalRef(jtext);
+  }
+
+  // Call the C++ Text2Tokens function
+  std::vector<std::string> result = kws->Text2Tokens(text);
+
+  // Convert the result back to a Java String[]
+  jobjectArray result_array = env->NewObjectArray(result.size(),
+                                                  env->FindClass("java/lang/String"),
+                                                  env->NewStringUTF(""));
+
+  for (size_t i = 0; i < result.size(); i++) {
+    env->SetObjectArrayElement(result_array, i, env->NewStringUTF(result[i].c_str()));
+  }
+
+  return result_array;
 }

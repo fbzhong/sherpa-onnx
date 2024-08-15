@@ -139,6 +139,8 @@ class KeywordSpotter {
 
   KeywordResult GetResult(OnlineStream *s) const;
 
+  std::vector<std::string> Text2Tokens(std::vector<std::string> text) const;
+
  private:
   std::unique_ptr<KeywordSpotterImpl> impl_;
 };

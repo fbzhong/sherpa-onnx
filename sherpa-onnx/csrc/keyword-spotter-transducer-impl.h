@@ -76,6 +76,8 @@ class KeywordSpotterTransducerImpl : public KeywordSpotterImpl {
 
     InitKeywords();
 
+    InitText2Tokens();
+
     decoder_ = std::make_unique<TransducerKeywordDecoder>(
         model_.get(), config_.max_active_paths, config_.num_trailing_blanks,
         unk_id_);
@@ -94,6 +96,8 @@ class KeywordSpotterTransducerImpl : public KeywordSpotterImpl {
     model_->SetFeatureDim(config.feat_config.feature_dim);
 
     InitKeywords(mgr);
+
+    InitText2Tokens(mgr);
 
     decoder_ = std::make_unique<TransducerKeywordDecoder>(
         model_.get(), config_.max_active_paths, config_.num_trailing_blanks,
@@ -257,6 +261,37 @@ class KeywordSpotterTransducerImpl : public KeywordSpotterImpl {
                    s->GetNumFramesSinceStart());
   }
 
+  std::vector<std::string> Text2Tokens(std::vector<std::string> text) const override {
+    if (!bpe_encoder_) {
+      return {};
+    }
+
+    std::stringstream ss;
+    for (const auto& line : text) {
+      ss << line << std::endl;
+    }
+
+    std::vector<std::vector<int32_t>> ids;
+    std::vector<float> scores;
+    if (!EncodeHotwords(ss, config_.model_config.modeling_unit, sym_, bpe_encoder_.get(), &ids, &scores)) {
+      SHERPA_ONNX_LOGE("Encode hotwords failed.");
+      return {};
+    }
+
+    std::vector<std::string> tokens;
+    for (const auto& id : ids) {
+      std::string token;
+      token.reserve(id.size() * 6);  // Estimate: average 5 chars per symbol + 1 space
+      for (size_t j = 0; j < id.size(); ++j) {
+        if (j > 0) token += ' ';
+        token += std::regex_replace(sym_[id[j]], std::regex(" "), "▁");
+      }
+      tokens.push_back(std::move(token));
+    }
+
+    return std::move(tokens);
+  }
+
  private:
   void InitKeywords(std::istream &is) {
     if (!EncodeKeywords(is, sym_, &keywords_id_, &keywords_, &boost_scores_,
@@ -270,6 +305,10 @@ class KeywordSpotterTransducerImpl : public KeywordSpotterImpl {
   }
 
   void InitKeywords() {
+    if (config_.keywords_file.empty()) {
+      return;
+    }
+
 #ifdef SHERPA_ONNX_ENABLE_WASM_KWS
     // Due to the limitations of the wasm file system,
     // the keyword_file variable is directly parsed as a string of keywords
@@ -288,10 +327,31 @@ class KeywordSpotterTransducerImpl : public KeywordSpotterImpl {
 #endif
   }
 
+  void InitText2Tokens(std::istream &is) {
+      bpe_encoder_ = std::make_unique<ssentencepiece::Ssentencepiece>(is);
+  }
+
+  void InitText2Tokens() {
+    if (config_.model_config.modeling_unit.empty() || config_.model_config.bpe_vocab.empty()) {
+      return;
+    }
+
+    std::ifstream is(config_.model_config.bpe_vocab);
+    if (!is) {
+      SHERPA_ONNX_LOGE("Open bpe vocab file failed: %s",
+                       config_.model_config.bpe_vocab.c_str());
+      exit(-1);
+    }
+    InitText2Tokens(is);
+  }
+
 #if __ANDROID_API__ >= 9
   void InitKeywords(AAssetManager *mgr) {
-    // each line in keywords_file contains space-separated words
+    if (config_.keywords_file.empty()) {
+      return;
+    }
 
+    // each line in keywords_file contains space-separated words
     auto buf = ReadFile(mgr, config_.keywords_file);
 
     std::istrstream is(buf.data(), buf.size());
@@ -302,6 +362,23 @@ class KeywordSpotterTransducerImpl : public KeywordSpotterImpl {
       exit(-1);
     }
     InitKeywords(is);
+  }
+
+  void InitText2Tokens(AAssetManager *mgr) {
+    if (config_.model_config.modeling_unit.empty() || config_.model_config.bpe_vocab.empty()) {
+      return;
+    }
+
+    auto buf = ReadFile(mgr, config_.model_config.bpe_vocab);
+
+    std::istrstream is(buf.data(), buf.size());
+
+    if (!is) {
+      SHERPA_ONNX_LOGE("Open bpe vocab file failed: %s",
+                       config_.model_config.bpe_vocab.c_str());
+      exit(-1);
+    }
+    InitText2Tokens(is);
   }
 #endif
 
@@ -325,6 +402,7 @@ class KeywordSpotterTransducerImpl : public KeywordSpotterImpl {
   ContextGraphPtr keywords_graph_;
   std::unique_ptr<OnlineTransducerModel> model_;
   std::unique_ptr<TransducerKeywordDecoder> decoder_;
+  std::unique_ptr<ssentencepiece::Ssentencepiece> bpe_encoder_;
   SymbolTable sym_;
   int32_t unk_id_ = -1;
 };

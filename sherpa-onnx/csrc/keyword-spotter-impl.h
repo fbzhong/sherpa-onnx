@@ -41,6 +41,8 @@ class KeywordSpotterImpl {
   virtual void DecodeStreams(OnlineStream **ss, int32_t n) const = 0;
 
   virtual KeywordResult GetResult(OnlineStream *s) const = 0;
+
+  virtual std::vector<std::string> Text2Tokens(std::vector<std::string> text) const = 0;
 };
 
 }  // namespace sherpa_onnx

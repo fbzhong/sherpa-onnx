@@ -89,23 +89,6 @@ void KeywordSpotterConfig::Register(ParseOptions *po) {
 }
 
 bool KeywordSpotterConfig::Validate() const {
-  if (keywords_file.empty()) {
-    SHERPA_ONNX_LOGE("Please provide --keywords-file.");
-    return false;
-  }
-
-#ifndef SHERPA_ONNX_ENABLE_WASM_KWS
-  // due to the limitations of the wasm file system,
-  // keywords file will be packaged into the sherpa-onnx-wasm-kws-main.data file
-  // Solution: take keyword_file variable is directly
-  // parsed as a string of keywords
-  if (!std::ifstream(keywords_file.c_str()).good()) {
-    SHERPA_ONNX_LOGE("Keywords file '%s' does not exist.",
-                     keywords_file.c_str());
-    return false;
-  }
-#endif
-
   return model_config.Validate();
 }
 
@@ -154,6 +137,10 @@ void KeywordSpotter::DecodeStreams(OnlineStream **ss, int32_t n) const {
 
 KeywordResult KeywordSpotter::GetResult(OnlineStream *s) const {
   return impl_->GetResult(s);
+}
+
+std::vector<std::string> KeywordSpotter::Text2Tokens(std::vector<std::string> text) const {
+  return impl_->Text2Tokens(text);
 }
 
 }  // namespace sherpa_onnx
